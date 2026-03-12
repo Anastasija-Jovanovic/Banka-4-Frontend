@@ -11,7 +11,7 @@ export default function Login() {
   const setAuth  = useAuthStore(s => s.setAuth);
   const cardRef  = useRef(null);
 
-  const [username,   setUsername]   = useState('');
+  const [email,      setEmail]      = useState('');
   const [password,   setPassword]  = useState('');
   const [error,      setError]     = useState(null);
   const [submitting, setSubmitting] = useState(false);
@@ -33,11 +33,11 @@ export default function Login() {
     setError(null);
     setSubmitting(true);
     try {
-      const res = await authApi.login({ username, password });
-      setAuth(res.employee, res.access_token);
+      const res = await authApi.login({ email, password });
+      setAuth(null, res.token);
       navigate('/');
     } catch (err) {
-      setError(err.error ?? 'Pogrešan username ili lozinka. Proverite unos i pokušajte ponovo.');
+      setError(err.error ?? 'Pogrešan email ili lozinka. Proverite unos i pokušajte ponovo.');
     } finally {
       setSubmitting(false);
     }
@@ -93,16 +93,16 @@ export default function Login() {
 
           <form onSubmit={handleSubmit} noValidate>
             <div className={styles.field}>
-              <label htmlFor="username">Username</label>
+              <label htmlFor="email">Email</label>
               <input
-                id="username"
-                type="text"
-                placeholder="korisnicko.ime"
-                value={username}
-                onChange={e => setUsername(e.target.value)}
-                autoComplete="username"
+                id="email"
+                type="email"
+                placeholder="ime@raf.rs"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                autoComplete="email"
                 required
-                className={username ? styles.hasValue : ''}
+                className={email ? styles.hasValue : ''}
               />
             </div>
 

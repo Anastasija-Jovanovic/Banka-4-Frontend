@@ -5,5 +5,5 @@ export const employeesApi = {
   getById:         (id)        => api.get(`/employees/${id}`),
   update:          (id, data)  => api.put(`/employees/${id}`, data),
   remove:          (id)        => api.delete(`/employees/${id}`),
-  changePassword:  (data)      => api.post('/employees/change-password', data),
+  changePassword:  (data)      => api.post('/change-password', data),
 };
