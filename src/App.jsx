@@ -8,6 +8,8 @@ import EmployeeList        from './pages/EmployeeList';
 import NewEmployee         from './pages/NewEmployee';
 import EmployeeDetails     from './pages/EmployeeDetails';
 import NotFound            from './pages/NotFound';
+import PaymentOverview from './pages/PaymentOverview';
+
 
 function ProtectedRoute({ children }) {
   const token = useAuthStore(s => s.token);
@@ -27,6 +29,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
+        <Route path="/payment-overview" element={<PaymentOverview />} />
         <Route path="/login"            element={<Login />} />
         <Route path="/reset-password"   element={<ResetPassword />} />
         <Route path="/activate"          element={<AccountActivation />} />
@@ -43,6 +46,9 @@ export default function App() {
         <Route path="/employees/:id" element={
           <ProtectedRoute><PermissionRoute permission="employee.view"><EmployeeDetails /></PermissionRoute></ProtectedRoute>
         } />
+        {/*<Route path="/payment-overview" element={
+          <ProtectedRoute><PaymentOverview /></ProtectedRoute>
+        } />*/}
 
         <Route path="*" element={<NotFound />} />
       </Routes>
