@@ -4,7 +4,7 @@ import { useAuthStore }  from './store/authStore';
 import App               from './App';
 import './styles/variables.css';
 
-//mock
+
 if (import.meta.env.DEV) {
   await import('./api/mock');
 }
