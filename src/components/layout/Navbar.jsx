@@ -77,6 +77,14 @@ export default function Navbar() {
 
 
           <NavLink
+            to="/payments"
+            className={({ isActive }) => `${styles.navLink} ${isActive ? styles.active : ''}`}
+          >
+          Plaćanja
+          </NavLink>
+
+
+          <NavLink
             to="/cards"
             className={({ isActive }) => `${styles.navLink} ${isActive ? styles.active : ''}`}
           >
@@ -151,6 +159,7 @@ export default function Navbar() {
             </div>
             
           )}
+
 
         </div>
 

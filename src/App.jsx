@@ -9,6 +9,8 @@ import NewEmployee         from './pages/NewEmployee';
 import EmployeeDetails     from './pages/EmployeeDetails';
 import Accounts            from './pages/Accounts';
 import NotFound            from './pages/NotFound';
+import PaymentOverview from './pages/PaymentOverview';
+
 
 import CardsPage           from './pages/CardsPage';
 
@@ -40,6 +42,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
+        {/*<Route path="/payment-overview" element={<PaymentOverview />} />*/}
         <Route path="/login"            element={<Login />} />
         <Route path="/reset-password"   element={<ResetPassword />} />
         <Route path="/activate"          element={<AccountActivation />} />
@@ -55,6 +58,9 @@ export default function App() {
         } />
         <Route path="/employees/:id" element={
           <ProtectedRoute><PermissionRoute permission="employee.view"><EmployeeDetails /></PermissionRoute></ProtectedRoute>
+        } />
+        <Route path="/payments" element={
+          <ProtectedRoute><PaymentOverview /></ProtectedRoute>
         } />
 
         <Route path="/cards" element={
