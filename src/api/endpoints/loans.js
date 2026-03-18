@@ -1,3 +1,4 @@
+
 import api from '../client';
 
 export const loansApi = {
@@ -7,3 +8,4 @@ export const loansApi = {
 
   updateRate:   (data)   => api.post('/loans/update-rate', data),
 };
+

@@ -9,6 +9,8 @@ import NewEmployee         from './pages/NewEmployee';
 import EmployeeDetails     from './pages/EmployeeDetails';
 import Accounts            from './pages/Accounts';
 import NotFound            from './pages/NotFound';
+import Loans from './pages/Loans';
+
 import PaymentOverview from './pages/PaymentOverview';
 
 
@@ -59,6 +61,10 @@ export default function App() {
         <Route path="/employees/:id" element={
           <ProtectedRoute><PermissionRoute permission="employee.view"><EmployeeDetails /></PermissionRoute></ProtectedRoute>
         } />
+]        <Route path="/loans" element={
+          <ProtectedRoute><Loans /></ProtectedRoute>
+        } />
+]
         <Route path="/payments" element={
           <ProtectedRoute><PaymentOverview /></ProtectedRoute>
         } />
