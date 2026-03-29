@@ -93,6 +93,13 @@ export default function Navbar() {
           Plaćanja
           </NavLink>
 
+          <NavLink
+            to="/client/securities"
+            className={({ isActive }) => `${styles.navLink} ${isActive ? styles.active : ''}`}
+          >
+          Hartije
+          </NavLink>
+
           {can('admin.cards') && (
             <NavLink
               to="/cards"
