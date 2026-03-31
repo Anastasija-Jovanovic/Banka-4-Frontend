@@ -90,7 +90,7 @@ export default function Navbar() {
             to="/payments"
             className={({ isActive }) => `${styles.navLink} ${isActive ? styles.active : ''}`}
           >
-          Plaćanja
+            Plaćanja
           </NavLink>
 
           {can('admin.cards') && (
@@ -102,8 +102,6 @@ export default function Navbar() {
             </NavLink>
           )}
 
-
-
           {can('account.create') && (
             <NavLink
               to="/accounts/new"
@@ -112,6 +110,14 @@ export default function Navbar() {
               Novi račun
             </NavLink>
           )}
+
+          <NavLink
+            to="/tax"
+            className={({ isActive }) => `${styles.navLink} ${isActive ? styles.active : ''}`}
+          >
+            Porez
+          </NavLink>
+
           {hasAdminAccess && (
             <div className={styles.adminDropdownWrap} ref={adminRef}>
               <button
@@ -168,11 +174,7 @@ export default function Navbar() {
                 </div>
               )}
             </div>
-            
           )}
-
-
-
         </div>
 
         <div className={styles.right}>
