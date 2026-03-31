@@ -23,7 +23,7 @@ export default function SecuritiesTable({
   securities,
   selectedId,
   onSelect,
-  onAction,   // { label: 'Buy' | 'Create Order', handler: fn }
+  onAction,   // { label: 'Kupi' | 'Kreiraj nalog', handler: fn }
   sortBy,
   sortDir,
   onSort,

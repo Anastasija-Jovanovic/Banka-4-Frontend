@@ -186,6 +186,7 @@ export default function ClientDashboard() {
     { label: 'Transferi',  path: '/client/transfers' },
     { label: 'Menjačnica', path: '/client/exchange' },
     { label: 'Kartice',    path: '/client/cards' },
+    { label: 'Hartije',    path: '/client/securities' },
     { label: 'Krediti',    path: '/client/loans' },
   ];
 
