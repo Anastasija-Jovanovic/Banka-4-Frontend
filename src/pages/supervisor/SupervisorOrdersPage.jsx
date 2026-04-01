@@ -4,11 +4,94 @@ import Navbar from '../../components/layout/Navbar';
 import Alert from '../../components/ui/Alert';
 import { ordersApi } from '../../api/endpoints/orders';
 import { useAuthStore } from '../../store/authStore';
-import { MOCK_ORDERS } from '../../api/mock';
-import { ORDER_STATUS, USER_ROLE, normalizeOrder, APPROVAL_DECISION } from '../../utils/orders/orderModel';
+import { ORDER_STATUS, USER_ROLE, normalizeOrder, APPROVAL_DECISION , ORDER_TYPE, ORDER_DIRECTION} from '../../utils/orders/orderModel';
 import { getOrderPermissions } from '../../utils/orders/orderPermissions';
 import styles from './SupervisorOrdersPage.module.css';
 import { useFetch } from '../../hooks/useFetch';
+import { usePermissions } from '../../hooks/usePermissions';
+
+const MOCK_ORDERS = [
+  {
+    id: 101,
+    agent_name: 'Miloš Milošević',
+    asset_name: 'AAPL',
+    asset_type: 'Stock',
+    order_type: ORDER_TYPE.MARKET,
+    quantity: 10,
+    contract_size: 1,
+    price_per_unit: 192.5,
+    direction: ORDER_DIRECTION.BUY,
+    remaining_portions: 10,
+    status: ORDER_STATUS.PENDING,
+    approved_by: '—',
+    last_modification: '2026-03-17T09:30:00Z',
+    settlement_date: null,
+  },
+  {
+    id: 102,
+    agent_name: 'Jelena Jovanović',
+    asset_name: 'EUR/USD',
+    asset_type: 'Forex',
+    order_type: ORDER_TYPE.LIMIT,
+    quantity: 2,
+    contract_size: 1000,
+    price_per_unit: 1.09,
+    direction: ORDER_DIRECTION.SELL,
+    remaining_portions: 2,
+    status: ORDER_STATUS.PENDING,
+    approved_by: '—',
+    last_modification: '2026-03-17T10:00:00Z',
+    settlement_date: '2026-03-15T00:00:00Z',
+  },
+  {
+    id: 103,
+    agent_name: 'Ana Anić',
+    asset_name: 'CLZ26',
+    asset_type: 'Futures',
+    order_type: ORDER_TYPE.STOP,
+    quantity: 3,
+    contract_size: 100,
+    price_per_unit: 80,
+    direction: ORDER_DIRECTION.BUY,
+    remaining_portions: 3,
+    status: ORDER_STATUS.APPROVED,
+    approved_by: 'Supervisor Admin',
+    last_modification: '2026-03-16T14:12:00Z',
+    settlement_date: '2026-12-20T00:00:00Z',
+  },
+  {
+    id: 104,
+    agent_name: 'Petar Petrović',
+    asset_name: 'MSFT',
+    asset_type: 'Stock',
+    order_type: ORDER_TYPE.STOP_LIMIT,
+    quantity: 5,
+    contract_size: 1,
+    price_per_unit: 410,
+    direction: ORDER_DIRECTION.SELL,
+    remaining_portions: 0,
+    status: ORDER_STATUS.DONE,
+    approved_by: 'Supervisor Admin',
+    last_modification: '2026-03-14T11:45:00Z',
+    settlement_date: null,
+  },
+  {
+    id: 105,
+    agent_name: 'Nikola Nikolić',
+    asset_name: 'TSLA',
+    asset_type: 'Stock',
+    order_type: ORDER_TYPE.LIMIT,
+    quantity: 8,
+    contract_size: 1,
+    price_per_unit: 215,
+    direction: ORDER_DIRECTION.BUY,
+    remaining_portions: 8,
+    status: ORDER_STATUS.DECLINED,
+    approved_by: 'Supervisor Admin',
+    last_modification: '2026-03-13T08:15:00Z',
+    settlement_date: null,
+  },
+];
 
 const FILTERS = [
   { key: 'ALL', label: 'All' },
@@ -31,12 +114,8 @@ export default function SupervisorOrdersPage() {
   const [feedback, setFeedback] = useState(null);
   const [processingId, setProcessingId] = useState(null);
 
-  const actorRole =
-    user?.role === USER_ROLE.ADMIN || user?.role === 'ADMIN'
-      ? USER_ROLE.ADMIN
-      : user?.role === USER_ROLE.SUPERVISOR || user?.role === 'SUPERVISOR'
-        ? USER_ROLE.SUPERVISOR
-        : USER_ROLE.EMPLOYEE;
+  const { isSupervisor } = usePermissions();
+  const actorRole = isSupervisor ? USER_ROLE.SUPERVISOR : USER_ROLE.EMPLOYEE;
 
   useLayoutEffect(() => {
     const ctx = gsap.context(() => {
