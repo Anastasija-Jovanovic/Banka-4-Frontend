@@ -20,7 +20,7 @@ export default function Navbar() {
   const adminRef = useRef(null);
 
   const { isSupervisor } = usePermissions();
-  const canAccessSupervisorOrders = Boolean(isSupervisor); 
+  const canAccessSupervisorPages = Boolean(isSupervisor); 
 
   useEffect(() => {
     function handleClick(e) {
@@ -114,12 +114,21 @@ export default function Navbar() {
             </NavLink>
           )}
 
-          {canAccessSupervisorOrders && (
+          {canAccessSupervisorPages && (
           <NavLink
             to="/supervisor/orders"
             className={({ isActive }) => `${styles.navLink} ${isActive ? styles.active : ''}`}
           >
             Orderi
+          </NavLink>
+          )}
+
+          {canAccessSupervisorPages && (
+          <NavLink
+            to="/profit-bank"
+            className={({ isActive }) => `${styles.navLink} ${isActive ? styles.active : ''}`}
+          >
+            Profit Banke
           </NavLink>
           )}
 

@@ -2,7 +2,9 @@ import { useRef, useLayoutEffect, useState, useMemo, useCallback } from 'react';
 import gsap from 'gsap';
 import { useAuthStore } from '../../store/authStore';
 import { securitiesApi } from '../../api/endpoints/securities';
+import { investmentFundsApi } from '../../api/endpoints/investmentFunds';
 import { useFetch } from '../../hooks/useFetch';
+import { usePermissions } from '../../hooks/usePermissions';
 import SecurityTabs from '../../features/securities/SecurityTabs';
 import SecuritiesTable from '../../features/securities/SecuritiesTable';
 import SecurityDetails from '../../features/securities/SecurityDetails';
@@ -15,7 +17,6 @@ import secStyles from './ClientSecurities.module.css';
 import { clientApi } from '../../api/endpoints/client';
 import { accountsApi } from '../../api/endpoints/accounts';
 import { loansApi } from '../../api/endpoints/loans';
-
 
 function applyFilters(list, filters, search) {
   return list.filter(sec => {
@@ -47,7 +48,6 @@ function applySort(list, sortBy, sortDir) {
   });
 }
 
-
 const ORDER_TYPES = [
   { value: 'MARKET', label: 'Market' },
   { value: 'LIMIT',  label: 'Limit' },
@@ -55,7 +55,7 @@ const ORDER_TYPES = [
   { value: 'STOP_LIMIT', label: 'Stop Limit' },
 ];
 
-function OrderModal({ security, activeTab, isEmployee, onClose }) {
+function OrderModal({ security, activeTab, isEmployee, isSupervisor, onClose }) {
   const [qty, setQty] = useState('');
   const [qtyError, setQtyError] = useState('');
   const [accountNumber, setAccountNumber] = useState('');
@@ -66,16 +66,22 @@ function OrderModal({ security, activeTab, isEmployee, onClose }) {
   const [submitted, setSubmitted] = useState(false);
   const [afterHours, setAfterHours] = useState(false);
   const [orderStatus, setOrderStatus] = useState(null);
-  const [allOrNone, setAllOrNone]     = useState(false);
-  const [isMargin, setIsMargin]       = useState(false);
+  const [allOrNone, setAllOrNone] = useState(false);
+  const [isMargin, setIsMargin] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [error, setError] = useState('');
 
+  const [buyForFund, setBuyForFund] = useState(false);
+  const [fundId, setFundId] = useState('');
+  const [buyForBank, setBuyForBank] = useState(false);
+
   const clientId = useAuthStore(s => s.user?.client_id ?? s.user?.id);
+
   const { data: accountsData, loading: accountsLoading } = useFetch(
     () => isEmployee ? accountsApi.getBankAccounts() : clientApi.getAccounts(clientId),
     [isEmployee, clientId]
   );
+
   const accounts = Array.isArray(accountsData)
     ? accountsData
     : accountsData?.data ?? accountsData?.content ?? [];
@@ -84,22 +90,36 @@ function OrderModal({ security, activeTab, isEmployee, onClose }) {
     () => (!clientId || isEmployee) ? Promise.resolve([]) : loansApi.getMyLoans(clientId),
     [clientId, isEmployee]
   );
+
+  const { data: managedFundsData, loading: managedFundsLoading } = useFetch(
+    () => isSupervisor ? investmentFundsApi.getManagedFunds() : Promise.resolve([]),
+    [isSupervisor]
+  );
+
+  const managedFunds = Array.isArray(managedFundsData)
+    ? managedFundsData
+    : managedFundsData?.data ?? managedFundsData?.content ?? [];
+
   const loansRaw = Array.isArray(loansData) ? loansData : loansData?.data ?? [];
   const approvedLoanAmount = loansRaw
     .filter(l => String(l.status ?? '').toUpperCase() === 'APPROVED')
     .reduce((sum, l) => sum + Number(l.amount ?? 0), 0);
+
   const loadingLoans = !isEmployee && loansLoading;
 
   if (!security) return null;
 
-  const label = isEmployee ? 'Kreiraj nalog (tok odobrenja)' : 'Kupi (odmah)';
   const qtyNum = Number(qty) || 0;
   const total = (security.price * qtyNum).toLocaleString('sr-RS', { minimumFractionDigits: 2 });
   const isMarket = orderType === 'MARKET';
   const needsLimit = orderType === 'LIMIT' || orderType === 'STOP_LIMIT';
   const needsStop  = orderType === 'STOP'  || orderType === 'STOP_LIMIT';
 
-  const selectedAccount = accounts.find(a => (a.AccountNumber ?? a.account_number ?? a.accountNumber ?? a.number) === accountNumber);
+  const selectedAccount = accounts.find(a => (
+    a.AccountNumber ?? a.account_number ?? a.accountNumber ?? a.number
+  ) === accountNumber);
+
+  const selectedFund = managedFunds.find(f => String(f.fund_id) === String(fundId));
 
   function getRequiredMarginAmount(quantityValue) {
     const qtyNumber = Number(quantityValue || 0);
@@ -127,14 +147,18 @@ function OrderModal({ security, activeTab, isEmployee, onClose }) {
 
   function validate() {
     setError('');
-    // Block orders on expired futures contracts
+
     if (security.type === 'FUTURES' && security.settlementDate) {
       if (new Date(security.settlementDate) < new Date()) {
         setError('Nije moguće kreirati order — futures ugovor je istekao.');
         return false;
       }
     }
-    if (!accountNumber) { setError('Izaberite račun.'); return false; }
+
+    if (!accountNumber) {
+      setError('Izaberite račun.');
+      return false;
+    }
 
     const n = Number(qty);
     if (!qty || isNaN(n) || n <= 0 || !Number.isInteger(n)) {
@@ -143,34 +167,64 @@ function OrderModal({ security, activeTab, isEmployee, onClose }) {
     }
 
     if (needsLimit && (!limitValue || Number(limitValue) <= 0)) {
-      setError('Unesite validnu limit cenu.'); return false;
-    }
-    if (needsStop && (!stopValue || Number(stopValue) <= 0)) {
-      setError('Unesite validnu stop cenu.'); return false;
+      setError('Unesite validnu limit cenu.');
+      return false;
     }
 
-    // Provera sredstava
+    if (needsStop && (!stopValue || Number(stopValue) <= 0)) {
+      setError('Unesite validnu stop cenu.');
+      return false;
+    }
+
+    if (isSupervisor && buyForFund && !fundId) {
+      setError('Izaberite investicioni fond.');
+      return false;
+    }
+
     const balance = selectedAccount
-      ? Number(selectedAccount.Balance ?? selectedAccount.AvailableBalance ?? selectedAccount.balance ?? selectedAccount.available_balance ?? 0)
+      ? Number(
+          selectedAccount.Balance ??
+          selectedAccount.AvailableBalance ??
+          selectedAccount.balance ??
+          selectedAccount.available_balance ?? 0
+        )
       : 0;
+
     const estimatedTotal = security.price * n;
 
     if (isMargin) {
       const requiredMargin = getRequiredMarginAmount(n);
+
       if (!isEmployee) {
         if (approvedLoanAmount < requiredMargin && balance < requiredMargin) {
-          setError(`Margin order nije dozvoljen. Potrebno je da odobren zajam ili stanje računa pokrije najmanje ${requiredMargin.toLocaleString('sr-RS', { minimumFractionDigits: 2 })}.`);
+          setError(
+            `Margin order nije dozvoljen. Potrebno je da odobren zajam ili stanje računa pokrije najmanje ${requiredMargin.toLocaleString('sr-RS', { minimumFractionDigits: 2 })}.`
+          );
           return false;
         }
       } else {
         if (balance < requiredMargin) {
-          setError(`Margin order nije dozvoljen. Zaposleni mora imati dovoljno sredstava na izabranom računu: najmanje ${requiredMargin.toLocaleString('sr-RS', { minimumFractionDigits: 2 })}.`);
+          setError(
+            `Margin order nije dozvoljen. Zaposleni mora imati dovoljno sredstava na izabranom računu: najmanje ${requiredMargin.toLocaleString('sr-RS', { minimumFractionDigits: 2 })}.`
+          );
           return false;
         }
       }
     } else if (selectedAccount && balance < estimatedTotal) {
-      setError(`Nedovoljno sredstava na računu. Stanje: ${balance.toLocaleString('sr-RS', { minimumFractionDigits: 2 })}, potrebno: ${estimatedTotal.toLocaleString('sr-RS', { minimumFractionDigits: 2 })}`);
+      setError(
+        `Nedovoljno sredstava na računu. Stanje: ${balance.toLocaleString('sr-RS', { minimumFractionDigits: 2 })}, potrebno: ${estimatedTotal.toLocaleString('sr-RS', { minimumFractionDigits: 2 })}`
+      );
       return false;
+    }
+
+    if (isSupervisor && buyForFund) {
+      const availableLiquidity = Number(selectedFund?.available_liquidity_rsd ?? selectedFund?.liquidity_rsd ?? 0);
+      if (availableLiquidity > 0 && estimatedTotal > availableLiquidity) {
+        setError(
+          `Fond nema dovoljno raspoložive likvidnosti. Dostupno: ${availableLiquidity.toLocaleString('sr-RS', { minimumFractionDigits: 2 })}`
+        );
+        return false;
+      }
     }
 
     return true;
@@ -188,14 +242,16 @@ function OrderModal({ security, activeTab, isEmployee, onClose }) {
 
     try {
       const result = await securitiesApi.buy({
-        listingId:     security.id,
+        listingId: security.id,
         accountNumber,
-        quantity:      Number(qty),
+        quantity: Number(qty),
         orderType,
-        limitValue:    needsLimit ? Number(limitValue) : 0,
-        stopValue:     needsStop  ? Number(stopValue)  : 0,
+        limitValue: needsLimit ? Number(limitValue) : 0,
+        stopValue: needsStop ? Number(stopValue) : 0,
         allOrNone,
-        margin:        isMargin,
+        margin: isMargin,
+        purchaseContext: isSupervisor && buyForFund ? 'FUND' : isSupervisor && buyForBank ? 'BANK' : 'STANDARD',
+        fundId: isSupervisor && buyForFund ? Number(fundId) : null,
       });
 
       setAfterHours(result?.after_hours === true);
@@ -240,54 +296,80 @@ function OrderModal({ security, activeTab, isEmployee, onClose }) {
             </p>
           </div>
         ) : showConfirm ? (
-          /* ── Dijalog potvrde ── */
           <div style={{ padding: '1.5rem' }}>
             <h4 style={{ fontSize: 15, fontWeight: 700, color: 'var(--tx-1)', marginTop: 0, marginBottom: 16 }}>
               Potvrda ordera
             </h4>
+
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10, fontSize: 14, color: 'var(--tx-1)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span style={{ color: 'var(--tx-2)' }}>Hartija:</span>
                 <strong>{security.ticker} — {security.name}</strong>
               </div>
+
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span style={{ color: 'var(--tx-2)' }}>Broj hartija:</span>
                 <strong>{qty}</strong>
               </div>
+
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span style={{ color: 'var(--tx-2)' }}>Tip ordera:</span>
                 <strong>{ORDER_TYPES.find(t => t.value === orderType)?.label}</strong>
               </div>
+
+              {isSupervisor && buyForFund && (
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: 'var(--tx-2)' }}>Kupovina za fond:</span>
+                  <strong>{selectedFund?.fund_name || '—'}</strong>
+                </div>
+              )}
+
+              {isSupervisor && buyForBank && (
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: 'var(--tx-2)' }}>Kupovina za:</span>
+                  <strong>Banka</strong>
+                </div>
+              )}
+
               {isMarket && (
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span style={{ color: 'var(--tx-2)' }}>Cena:</span>
-                  <span style={{ fontStyle: 'italic', color: 'var(--tx-2)' }}>Koristi se tržišna (market) cena</span>
+                  <span style={{ fontStyle: 'italic', color: 'var(--tx-2)' }}>
+                    Koristi se tržišna (market) cena
+                  </span>
                 </div>
               )}
+
               {needsLimit && (
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span style={{ color: 'var(--tx-2)' }}>Limit cena:</span>
                   <strong>{Number(limitValue).toLocaleString('sr-RS', { minimumFractionDigits: 2 })} {security.currency}</strong>
                 </div>
               )}
+
               {needsStop && (
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span style={{ color: 'var(--tx-2)' }}>Stop cena:</span>
                   <strong>{Number(stopValue).toLocaleString('sr-RS', { minimumFractionDigits: 2 })} {security.currency}</strong>
                 </div>
               )}
+
               {allOrNone && (
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span style={{ color: 'var(--tx-2)' }}>All or None:</span>
                   <strong>Da</strong>
                 </div>
               )}
+
               {isMargin && (
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span style={{ color: 'var(--tx-2)' }}>Margin:</span>
-                  <strong>Da ({getRequiredMarginAmount(qty).toLocaleString('sr-RS', { minimumFractionDigits: 2 })} {security.currency})</strong>
+                  <strong>
+                    Da ({getRequiredMarginAmount(qty).toLocaleString('sr-RS', { minimumFractionDigits: 2 })} {security.currency})
+                  </strong>
                 </div>
               )}
+
               <div style={{ borderTop: '1px solid var(--border)', paddingTop: 10, display: 'flex', justifyContent: 'space-between' }}>
                 <span style={{ color: 'var(--tx-2)' }}>Približna ukupna cena:</span>
                 <strong style={{ fontSize: 16, color: 'var(--accent)' }}>{total} {security.currency}</strong>
@@ -306,6 +388,7 @@ function OrderModal({ security, activeTab, isEmployee, onClose }) {
               >
                 Nazad
               </button>
+
               <button
                 type="button"
                 className={styles.submitBtn}
@@ -318,7 +401,6 @@ function OrderModal({ security, activeTab, isEmployee, onClose }) {
             </div>
           </div>
         ) : (
-          /* ── Forma za kreiranje ── */
           <form className={styles.formCard} style={{ boxShadow: 'none', border: 'none' }} onSubmit={handleProceedToConfirm}>
             <div className={styles.formField}>
               <label>Hartija</label>
@@ -345,6 +427,7 @@ function OrderModal({ security, activeTab, isEmployee, onClose }) {
                   <option key={t.value} value={t.value}>{t.label}</option>
                 ))}
               </select>
+
               {isMarket && (
                 <p style={{ fontSize: 12, color: 'var(--tx-3)', margin: '4px 0 0', fontStyle: 'italic' }}>
                   Koristi se trenutna tržišna (market) cena.
@@ -396,10 +479,10 @@ function OrderModal({ security, activeTab, isEmployee, onClose }) {
                   {accountsLoading ? 'Učitavanje...' : 'Izaberite račun...'}
                 </option>
                 {accounts.map((a, i) => {
-                  const num  = a.AccountNumber ?? a.account_number ?? a.accountNumber ?? a.number ?? '';
+                  const num = a.AccountNumber ?? a.account_number ?? a.accountNumber ?? a.number ?? '';
                   const name = a.Name ?? a.name ?? a.owner_name ?? a.ownerName ?? a.owner ?? `Račun ${i + 1}`;
-                  const bal  = a.Balance ?? a.AvailableBalance ?? a.balance ?? a.available_balance ?? a.availableBalance;
-                  const cur  = a.Currency?.Code ?? a.currency ?? '';
+                  const bal = a.Balance ?? a.AvailableBalance ?? a.balance ?? a.available_balance ?? a.availableBalance;
+                  const cur = a.Currency?.Code ?? a.currency ?? '';
                   return (
                     <option key={num || i} value={num}>
                       {name}{num ? ` — ${num}` : ''}
@@ -408,12 +491,97 @@ function OrderModal({ security, activeTab, isEmployee, onClose }) {
                   );
                 })}
               </select>
+
               {!accountsLoading && accounts.length === 0 && (
                 <p style={{ fontSize: 12, color: 'var(--red)', margin: '4px 0 0' }}>
                   {isEmployee ? 'Nisu pronađeni bankini interni računi.' : 'Nemate aktivnih računa.'}
                 </p>
               )}
             </div>
+
+            {isSupervisor && (
+              <>
+                <div className={styles.formField}>
+                  <label>Način kupovine</label>
+
+                  <div style={{ display: 'flex', gap: 20, marginTop: 4, flexWrap: 'wrap' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}>
+                      <input
+                        type="radio"
+                        checked={!buyForFund && !buyForBank}
+                        onChange={() => {
+                          setBuyForFund(false);
+                          setBuyForBank(false);
+                          setFundId('');
+                        }}
+                      />
+                      Standardna kupovina
+                    </label>
+
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}>
+                      <input
+                        type="radio"
+                        checked={buyForFund}
+                        onChange={() => {
+                          setBuyForFund(true);
+                          setBuyForBank(false);
+                        }}
+                      />
+                      Kupujem za investicioni fond
+                    </label>
+
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}>
+                      <input
+                        type="radio"
+                        checked={buyForBank}
+                        onChange={() => {
+                          setBuyForBank(true);
+                          setBuyForFund(false);
+                          setFundId('');
+                        }}
+                      />
+                      Kupujem za banku
+                    </label>
+                  </div>
+                </div>
+
+                {buyForFund && (
+                  <div className={styles.formField}>
+                    <label>Investicioni fond</label>
+                    <select
+                      className={styles.formInput}
+                      value={fundId}
+                      onChange={e => setFundId(e.target.value)}
+                      required
+                    >
+                      <option value="">
+                        {managedFundsLoading ? 'Učitavanje fondova...' : 'Izaberite fond...'}
+                      </option>
+
+                      {managedFunds.map((fund) => (
+                        <option key={fund.fund_id} value={fund.fund_id}>
+                          {fund.fund_name}
+                        </option>
+                      ))}
+                    </select>
+
+                    {selectedFund && (
+                      <p style={{ fontSize: 12, color: 'var(--tx-3)', margin: '4px 0 0' }}>
+                        Dostupna likvidnost fonda: {Number(
+                          selectedFund.available_liquidity_rsd ?? selectedFund.liquidity_rsd ?? 0
+                        ).toLocaleString('sr-RS', { minimumFractionDigits: 2 })}
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {buyForBank && (
+                  <p style={{ fontSize: 12, color: 'var(--tx-3)', margin: '4px 0 0' }}>
+                    Kupovina će biti evidentirana u ime banke.
+                  </p>
+                )}
+              </>
+            )}
 
             <div className={styles.formField}>
               <label>Količina</label>
@@ -478,77 +646,67 @@ function OrderModal({ security, activeTab, isEmployee, onClose }) {
 export default function ClientSecurities() {
   const pageRef = useRef(null);
   const user = useAuthStore(s => s.user);
+  const { isSupervisor } = usePermissions();
+  const canAccessSupervisorFeatures = Boolean(isSupervisor);
 
-  const isEmployee    = user?.identity_type === 'employee';
-  const canSeeForex   = isEmployee;
+  const isEmployee = user?.identity_type === 'employee';
+  const canSeeForex = isEmployee;
   const canSeeOptions = isEmployee;
 
   const [activeTab, setActiveTab] = useState('STOCK');
-  const [selectedSec, setSelectedSec]   = useState(null);
-  const [search,      setSearch]         = useState('');
-  const [filters,     setFilters]        = useState(DEFAULT_FILTERS);
-  const [sortBy,      setSortBy]         = useState('');
-  const [sortDir,     setSortDir]        = useState('desc');
-  const [orderModal,  setOrderModal]     = useState(null);
+  const [selectedSec, setSelectedSec] = useState(null);
+  const [search, setSearch] = useState('');
+  const [filters, setFilters] = useState(DEFAULT_FILTERS);
+  const [sortBy, setSortBy] = useState('');
+  const [sortDir, setSortDir] = useState('desc');
+  const [orderModal, setOrderModal] = useState(null);
 
- 
   const fetcher = useCallback(() => {
     const params = { page: 1, page_size: 500 };
-    if (activeTab === 'STOCK')   return securitiesApi.getStocks(params);
+    if (activeTab === 'STOCK') return securitiesApi.getStocks(params);
     if (activeTab === 'FUTURES') return securitiesApi.getFutures(params);
-    if (activeTab === 'FOREX')   return securitiesApi.getForex(params);
+    if (activeTab === 'FOREX') return securitiesApi.getForex(params);
     if (activeTab === 'OPTIONS') return securitiesApi.getOptions(params);
     return Promise.resolve([]);
   }, [activeTab]);
 
-  const { data: rawData, loading, error, refetch } = useFetch(fetcher, [activeTab]);
+  const { data: rawData, loading, error } = useFetch(fetcher, [activeTab]);
 
-const securities = Array.isArray(rawData)
-  ? rawData
-  : rawData?.data ?? [];
-
+  const securities = Array.isArray(rawData)
+    ? rawData
+    : rawData?.data ?? [];
 
   const filtered = useMemo(() => applyFilters(securities, filters, search), [securities, filters, search]);
-  const sorted   = useMemo(() => applySort(filtered, sortBy, sortDir), [filtered, sortBy, sortDir]);
+  const sorted = useMemo(() => applySort(filtered, sortBy, sortDir), [filtered, sortBy, sortDir]);
 
-  //useLayoutEffect(() => {
-  //  setSelectedSec(sorted[0] ?? null);
-  //}, [activeTab]);   
   useLayoutEffect(() => {
     if (loading) return;
     const ctx = gsap.context(() => {
-      gsap.from('.sec-card', { opacity: 0, y: 18, duration: 0.4, ease: 'power2.out', stagger: 0.06 });
+      gsap.from('.sec-card', {
+        opacity: 0,
+        y: 18,
+        duration: 0.4,
+        ease: 'power2.out',
+        stagger: 0.06,
+      });
     }, pageRef);
     return () => ctx.revert();
   }, [loading, activeTab]);
-/*
-  async function handleSelectSecurity(sec) {
-    try {
-      let details;
-      if (activeTab === 'STOCK')   details = await securitiesApi.getStockById(sec.id);
-      if (activeTab === 'FUTURES') details = await securitiesApi.getFuturesById(sec.id);
-      if (activeTab === 'FOREX')   details = await securitiesApi.getForexById(sec.id);
-      setSelectedSec(details ?? sec);
-    } catch {
-      setSelectedSec(sec);  
-    }
-  }
-*/
 
   async function handleSelectSecurity(sec) {
     setSelectedSec(sec);
     try {
       let details;
-      if (activeTab === 'STOCK')   details = await securitiesApi.getStockById(sec.id);
+      if (activeTab === 'STOCK') details = await securitiesApi.getStockById(sec.id);
       if (activeTab === 'FUTURES') details = await securitiesApi.getFuturesById(sec.id);
-      if (activeTab === 'FOREX')   details = await securitiesApi.getForexById(sec.id);
+      if (activeTab === 'FOREX') details = await securitiesApi.getForexById(sec.id);
       if (activeTab === 'OPTIONS') details = await securitiesApi.getOptionById(sec.id);
       if (details) setSelectedSec(details);
     } catch {
       // fallback to list data
     }
   }
-  
+
   async function handleRefresh(sec) {
     await handleSelectSecurity(sec);
   }
@@ -572,7 +730,7 @@ const securities = Array.isArray(rawData)
   }
 
   const actionConfig = {
-    label:   isEmployee ? 'Kreiraj nalog' : 'Kupi',
+    label: isEmployee ? 'Kreiraj nalog' : 'Kupi',
     handler: sec => setOrderModal(sec),
   };
 
@@ -618,7 +776,6 @@ const securities = Array.isArray(rawData)
           />
         </div>
 
-        {/* ── Sadržaj ── */}
         {loading ? (
           <div style={{ display: 'flex', justifyContent: 'center', padding: '4rem' }}>
             <Spinner />
@@ -640,15 +797,18 @@ const securities = Array.isArray(rawData)
             </div>
 
             <div className={secStyles.detailPane}>
-              {selectedSec
-                ? <SecurityDetails
-                    security={selectedSec}
-                    isEmployee={isEmployee}
-                    onAction={sec => setOrderModal(sec)}
-                    onRefresh={handleRefresh}
-                  />
-                : <p style={{ color: 'var(--tx-3)', padding: '2rem' }}>Izaberite hartiju za detalje.</p>
-              }
+              {selectedSec ? (
+                <SecurityDetails
+                  security={selectedSec}
+                  isEmployee={isEmployee}
+                  onAction={sec => setOrderModal(sec)}
+                  onRefresh={handleRefresh}
+                />
+              ) : (
+                <p style={{ color: 'var(--tx-3)', padding: '2rem' }}>
+                  Izaberite hartiju za detalje.
+                </p>
+              )}
             </div>
           </div>
         )}
@@ -659,6 +819,7 @@ const securities = Array.isArray(rawData)
           security={orderModal}
           activeTab={activeTab}
           isEmployee={isEmployee}
+          isSupervisor={canAccessSupervisorFeatures}
           onClose={() => setOrderModal(null)}
         />
       )}

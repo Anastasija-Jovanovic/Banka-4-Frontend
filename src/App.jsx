@@ -53,6 +53,7 @@ import RatesList          from './features/exchange/RatesList.jsx';
 import CurrencyCalculator from './features/exchange/CurrencyCalculator.jsx';
 
 import SupervisorOrdersPage from './pages/supervisor/SupervisorOrdersPage.jsx';
+import ProfitBankPage from './pages/profit-bank/ProfitBankPage.jsx';
 
 function ProtectedRoute({ children }) {
   const token = useAuthStore(s => s.token);
@@ -157,6 +158,9 @@ export default function App() {
         } />
         <Route path="/supervisor/orders" element={
           <ProtectedRoute><SupervisorRoute><SupervisorOrdersPage /></SupervisorRoute></ProtectedRoute>
+        } />
+        <Route path="/profit-bank" element={
+          <ProtectedRoute><SupervisorRoute><ProfitBankPage /></SupervisorRoute></ProtectedRoute>
         } />
 
         <Route path="/exchange/rates"      element={<ProtectedRoute><ClientRoute><RatesList /></ClientRoute></ProtectedRoute>} />
