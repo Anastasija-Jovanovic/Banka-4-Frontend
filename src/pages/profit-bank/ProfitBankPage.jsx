@@ -4,6 +4,8 @@ import Navbar from '../../components/layout/Navbar';
 import Alert from '../../components/ui/Alert';
 import { useFetch } from '../../hooks/useFetch';
 import { investmentFundsApi } from '../../api/endpoints/investmentFunds';
+import { accountsApi } from '../../api/endpoints/accounts';
+import { portfolioApi } from '../../api/endpoints/portfolio';
 import styles from './ProfitBankPage.module.css';
 
 const TAB = {
@@ -67,7 +69,7 @@ export default function ProfitBankPage() {
   } = useFetch(() => investmentFundsApi.getFunds({ managed_only: true }), []);
 
   const {
-    data: selectedFund,
+    data: selectedFundResponse,
     loading: fundDetailsLoading,
     error: fundDetailsError,
     refetch: refetchFundDetails,
@@ -76,12 +78,22 @@ export default function ProfitBankPage() {
     [selectedFundId]
   );
 
+  const {
+    data: bankAccountsResponse,
+    loading: bankAccountsLoading,
+  } = useFetch(() => accountsApi.getAll(), []);
+
+  const {
+    data: actuaryPortfolioResponse,
+    loading: actuaryPortfolioLoading,
+  } = useFetch(() => portfolioApi.getActuaryPortfolio(), []);
+
   const actuaries = useMemo(() => {
     const raw = Array.isArray(actuariesResponse)
       ? actuariesResponse
       : actuariesResponse?.data ?? [];
-    const next = [...raw];
 
+    const next = [...raw];
     next.sort((a, b) => {
       const aProfit = Number(a.profit_rsd ?? 0);
       const bProfit = Number(b.profit_rsd ?? 0);
@@ -97,9 +109,40 @@ export default function ProfitBankPage() {
       : fundsResponse?.data ?? [];
   }, [fundsResponse]);
 
+  const selectedFund = useMemo(() => {
+    if (!selectedFundResponse) return null;
+    return Array.isArray(selectedFundResponse)
+      ? selectedFundResponse[0]
+      : selectedFundResponse?.data ?? selectedFundResponse;
+  }, [selectedFundResponse]);
+
+  const bankAccounts = useMemo(() => {
+    return Array.isArray(bankAccountsResponse)
+      ? bankAccountsResponse
+      : bankAccountsResponse?.data ?? bankAccountsResponse?.content ?? [];
+  }, [bankAccountsResponse]);
+
+  const actuaryPortfolio = useMemo(() => {
+    return Array.isArray(actuaryPortfolioResponse)
+      ? actuaryPortfolioResponse
+      : actuaryPortfolioResponse?.data ?? [];
+  }, [actuaryPortfolioResponse]);
+
   function openFundAction(type, fund) {
+    const firstBankAccount =
+      bankAccounts.find(acc =>
+        String(acc.account_type ?? acc.accountType ?? '').toLowerCase() === 'fund'
+      ) ??
+      bankAccounts[0];
+
+    const bankAccountNumber =
+      firstBankAccount?.account_number ??
+      firstBankAccount?.accountNumber ??
+      firstBankAccount?.AccountNumber ??
+      '';
+
     setForm({
-      bankAccountNumber: fund?.fund_account?.account_number || '',
+      bankAccountNumber,
       amount: '',
     });
 
@@ -141,7 +184,7 @@ export default function ProfitBankPage() {
 
     if (
       modalState.type === ACTION.WITHDRAW &&
-      amount > Number(fund?.liquidity_rsd ?? 0)
+      amount > Number(fund?.liquidity_rsd ?? fund?.available_liquidity_rsd ?? 0)
     ) {
       setFeedback({
         type: 'greska',
@@ -156,12 +199,14 @@ export default function ProfitBankPage() {
           bank_account_number: form.bankAccountNumber,
           amount_rsd: amount,
         });
+
         setFeedback({ type: 'uspeh', text: 'Uplata u fond je uspešno evidentirana.' });
       } else {
         await investmentFundsApi.withdrawFromFund(fund.fund_id, {
           bank_account_number: form.bankAccountNumber,
           amount_rsd: amount,
         });
+
         setFeedback({ type: 'uspeh', text: 'Povlačenje iz fonda je uspešno evidentirano.' });
       }
 
@@ -245,7 +290,7 @@ export default function ProfitBankPage() {
                 type="button"
                 className={styles.btnGhost}
                 onClick={() =>
-                  setSortDirection((prev) => (prev === 'desc' ? 'asc' : 'desc'))
+                  setSortDirection(prev => (prev === 'desc' ? 'asc' : 'desc'))
                 }
               >
                 Sortiraj po profitu: {sortDirection === 'desc' ? 'Opadajuće' : 'Rastuće'}
@@ -262,36 +307,80 @@ export default function ProfitBankPage() {
                 </button>
               </div>
             ) : (
-              <div className={styles.tableWrap}>
-                <table className={styles.table}>
-                  <thead>
-                    <tr>
-                      <th>Ime</th>
-                      <th>Prezime</th>
-                      <th>Pozicija</th>
-                      <th>Profit u RSD</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {actuaries.length === 0 ? (
+              <>
+                <div className={styles.tableWrap}>
+                  <table className={styles.table}>
+                    <thead>
                       <tr>
-                        <td colSpan="4" className={styles.emptyTable}>
-                          Nema podataka za prikaz.
-                        </td>
+                        <th>Ime</th>
+                        <th>Prezime</th>
+                        <th>Pozicija</th>
+                        <th>Profit u RSD</th>
                       </tr>
-                    ) : (
-                      actuaries.map((item) => (
-                        <tr key={item.actuary_id}>
-                          <td>{item.first_name}</td>
-                          <td>{item.last_name}</td>
-                          <td>{formatPosition(item.position)}</td>
-                          <td>{formatRSD(item.profit_rsd)}</td>
+                    </thead>
+                    <tbody>
+                      {actuaries.length === 0 ? (
+                        <tr>
+                          <td colSpan="4" className={styles.emptyTable}>
+                            Nema podataka za prikaz.
+                          </td>
                         </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
+                      ) : (
+                        actuaries.map((item) => (
+                          <tr key={item.actuary_id}>
+                            <td>{item.first_name}</td>
+                            <td>{item.last_name}</td>
+                            <td>{formatPosition(item.position)}</td>
+                            <td>{formatRSD(item.profit_rsd)}</td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div style={{ padding: '20px 28px 0' }}>
+                  <div className={styles.sectionEyebrow} style={{ marginBottom: 10 }}>
+                    Portfolio aktuara
+                  </div>
+                  {actuaryPortfolioLoading ? (
+                    <div className={styles.loadingState} style={{ marginTop: 0 }}>
+                      Učitavanje portfolija...
+                    </div>
+                  ) : (
+                    <div className={styles.tableWrap}>
+                      <table className={styles.table}>
+                        <thead>
+                          <tr>
+                            <th>Ticker</th>
+                            <th>Naziv</th>
+                            <th>Količina</th>
+                            <th>Vrednost</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {actuaryPortfolio.length === 0 ? (
+                            <tr>
+                              <td colSpan="4" className={styles.emptyTable}>
+                                Nema stavki u portfoliju.
+                              </td>
+                            </tr>
+                          ) : (
+                            actuaryPortfolio.map((item, index) => (
+                              <tr key={item.id ?? item.asset_id ?? index}>
+                                <td>{item.ticker ?? '—'}</td>
+                                <td>{item.name ?? item.asset_name ?? '—'}</td>
+                                <td>{item.quantity ?? item.volume ?? '—'}</td>
+                                <td>{formatRSD(item.value_rsd ?? item.total_value_rsd ?? item.current_value ?? 0)}</td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              </>
             )}
           </section>
         )}
@@ -413,15 +502,12 @@ export default function ProfitBankPage() {
                 <div className={styles.detailGrid}>
                   <InfoCard
                     label="Menadžer"
-                    value={`${selectedFund.manager?.first_name} ${selectedFund.manager?.last_name}`}
+                    value={`${selectedFund.manager?.first_name ?? ''} ${selectedFund.manager?.last_name ?? ''}`.trim() || '—'}
                   />
                   <InfoCard label="Udeo banke (%)" value={formatPercent(selectedFund.bank_share_percent)} />
                   <InfoCard label="Udeo banke (RSD)" value={formatRSD(selectedFund.bank_share_rsd)} />
                   <InfoCard label="Profit u RSD" value={formatRSD(selectedFund.profit_rsd)} />
-                  <InfoCard
-                    label="Dostupna likvidnost"
-                    value={formatRSD(selectedFund.liquidity_rsd)}
-                  />
+                  <InfoCard label="Dostupna likvidnost" value={formatRSD(selectedFund.liquidity_rsd)} />
                   <InfoCard label="Opis" value={selectedFund.description || '—'} />
                 </div>
 
@@ -430,17 +516,22 @@ export default function ProfitBankPage() {
                 <div className={styles.accountsBlock}>
                   <h3 className={styles.subTitle}>Bankovni račun fonda</h3>
 
-                  {selectedFund.fund_account && (
+                  {selectedFund.fund_account ? (
                     <div className={styles.accountItem}>
                       <strong>{selectedFund.fund_account.name || 'Račun fonda'}</strong>
                       <span>{selectedFund.fund_account.account_number}</span>
+                    </div>
+                  ) : (
+                    <div className={styles.accountItem}>
+                      <strong>Nema povezanog računa</strong>
+                      <span>—</span>
                     </div>
                   )}
                 </div>
 
                 <div className={styles.sectionDivider} />
 
-                <div className={styles.actionRow}>
+                <div className={styles.actionRow} style={{ padding: '0 28px 28px' }}>
                   <button
                     type="button"
                     className={styles.btnPrimary}
@@ -487,8 +578,7 @@ export default function ProfitBankPage() {
             <form onSubmit={handleSubmitFundAction} className={styles.modalBody}>
               <div className={styles.fieldGrid2}>
                 <Polje label="Bankovni račun" required>
-                  <input
-                    type="text"
+                  <select
                     value={form.bankAccountNumber}
                     onChange={(e) =>
                       setForm((prev) => ({
@@ -496,7 +586,31 @@ export default function ProfitBankPage() {
                         bankAccountNumber: e.target.value,
                       }))
                     }
-                  />
+                  >
+                    <option value="">
+                      {bankAccountsLoading ? 'Učitavanje računa...' : 'Izaberite račun...'}
+                    </option>
+
+                    {bankAccounts.map((account, index) => {
+                      const number =
+                        account.account_number ??
+                        account.accountNumber ??
+                        account.AccountNumber ??
+                        '';
+
+                      const name =
+                        account.name ??
+                        account.Name ??
+                        account.owner_name ??
+                        `Račun ${index + 1}`;
+
+                      return (
+                        <option key={number || index} value={number}>
+                          {name}{number ? ` — ${number}` : ''}
+                        </option>
+                      );
+                    })}
+                  </select>
                 </Polje>
 
                 <Polje label="Iznos u RSD" required>
@@ -517,7 +631,12 @@ export default function ProfitBankPage() {
 
               {modalState.type === ACTION.WITHDRAW && (
                 <div className={styles.infoStrip}>
-                  Dostupna likvidnost fonda: {formatRSD(modalState.fund?.liquidity_rsd || 0)}
+                  Dostupna likvidnost fonda:{' '}
+                  {formatRSD(
+                    modalState.fund?.liquidity_rsd ??
+                    modalState.fund?.available_liquidity_rsd ??
+                    0
+                  )}
                 </div>
               )}
 

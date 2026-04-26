@@ -1,80 +1,42 @@
-import apiClient from '../client';
+import { tradingApi } from '../client';
 
 export const investmentFundsApi = {
-  // =========================
-  // POSTOJEĆE U SWAGGERU
-  // =========================
+  createFund: (payload) =>
+    tradingApi.post('/investment-funds', payload),
 
-  createFund(payload) {
-    return apiClient.post('/api/investment-funds', payload);
-  },
+  getFunds: (params = {}) =>
+    tradingApi.get('/investment-funds', { params }),
 
-  getAccounts(params = {}) {
-    return apiClient.get('/api/accounts', { params });
-  },
+  getFundDetails: (fundId) =>
+    tradingApi.get(`/investment-funds/${fundId}`),
 
-  getClientAccounts(clientId) {
-    return apiClient.get(`/api/clients/${clientId}/accounts`);
-  },
+  getFundAssets: (fundId) =>
+    tradingApi.get(`/investment-funds/${fundId}/assets`),
 
-  getActuaryAssets(actuaryId) {
-    return apiClient.get(`/api/actuary/${actuaryId}/assets`);
-  },
+  getFundPerformance: (fundId, range = 'monthly') =>
+    tradingApi.get(`/investment-funds/${fundId}/performance`, { params: { range } }),
 
-  getActuaryProfit(actuaryId) {
-    return apiClient.get(`/api/actuary/${actuaryId}/assets/profit`);
-  },
+  getManagedFunds: () =>
+    tradingApi.get('/me/funds'),
 
-  getClientProfit(clientId) {
-    return apiClient.get(`/api/client/${clientId}/assets/profit`);
-  },
+  depositToFund: (fundId, payload) =>
+    tradingApi.post(`/investment-funds/${fundId}/deposit`, payload),
 
-  // =========================
-  // NEDOSTAJE U SWAGGERU
-  // =========================
+  withdrawFromFund: (fundId, payload) =>
+    tradingApi.post(`/investment-funds/${fundId}/withdraw`, payload),
 
-  getFunds(params = {}) {
-    return apiClient.get('/api/investment-funds', { params });
-  },
+  investInFund: (fundId, payload) =>
+    tradingApi.post(`/investment-funds/${fundId}/invest`, payload),
 
-  getFundDetails(fundId) {
-    return apiClient.get(`/api/investment-funds/${fundId}`);
-  },
+  sellFundAsset: (fundId, assetId, payload) =>
+    tradingApi.post(`/investment-funds/${fundId}/assets/${assetId}/sell`, payload),
 
-  getFundAssets(fundId) {
-    return apiClient.get(`/api/investment-funds/${fundId}/assets`);
-  },
+  getActuaryPerformances: () =>
+    tradingApi.get('/profit-bank/actuaries'),
 
-  getFundPerformance(fundId, range = 'monthly') {
-    return apiClient.get(`/api/investment-funds/${fundId}/performance`, {
-      params: { range },
-    });
-  },
+  getActuaryProfit: (actuaryId) =>
+    tradingApi.get(`/actuary/${actuaryId}/assets/profit`),
 
-  getManagedFunds() {
-    return apiClient.get('/api/me/funds');
-  },
-
-  depositToFund(fundId, payload) {
-    return apiClient.post(`/api/investment-funds/${fundId}/deposit`, payload);
-  },
-
-  withdrawFromFund(fundId, payload) {
-    return apiClient.post(`/api/investment-funds/${fundId}/withdraw`, payload);
-  },
-
-  investInFund(fundId, payload) {
-    return apiClient.post(`/api/investment-funds/${fundId}/invest`, payload);
-  },
-
-  sellFundAsset(fundId, assetId, payload) {
-    return apiClient.post(
-      `/api/investment-funds/${fundId}/assets/${assetId}/sell`,
-      payload
-    );
-  },
-
-  getActuaryPerformances() {
-    return apiClient.get('/api/profit-bank/actuaries');
-  },
+  getClientProfit: (clientId) =>
+    tradingApi.get(`/client/${clientId}/assets/profit`),
 };
