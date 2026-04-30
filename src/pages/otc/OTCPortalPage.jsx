@@ -4,6 +4,7 @@ import { useAuthStore } from '../../store/authStore';
 import { usePermissions } from '../../hooks/usePermissions';
 import Spinner from '../../components/ui/Spinner';
 import OfferModal from './components/OfferModal';
+import Navbar from "../../components/layout/Navbar.jsx";
 // privremeno: mock podaci dok ne povežemo backend
 const MOCK_STOCKS = [
     {
@@ -78,6 +79,7 @@ export default function OtcPortalPage() {
 
     return (
         <div className={styles.wrap}>
+            <Navbar />
             <div className={styles.header}>
                 <h1 className={styles.title}>OTC Portal</h1>
                 <p className={styles.subtitle}>

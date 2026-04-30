@@ -1,23 +1,25 @@
 .wrap {
-  padding: 24px;
+  padding: 0px;
 }
 
 .header {
-  margin-bottom: 16px;
+
+  margin-bottom: 20px;
 }
 
 .title {
-  margin: 0;
+  margin: 24px;
   font-size: 28px;
   font-weight: 700;
 }
 
 .subtitle {
-  margin: 6px 0 0 0;
+  margin: 10px 25px 25px 25px;
   opacity: 0.75;
 }
 
 .card {
+  margin: 0 24px;
   background: white;
   border-radius: 12px;
   padding: 16px;
@@ -31,6 +33,7 @@
 }
 
 .tableWrap {
+
   overflow: auto;
 }
 
